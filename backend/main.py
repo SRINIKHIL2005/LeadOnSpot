@@ -83,7 +83,7 @@ def score_lead(lead: LeadInput):
         "confidence": score_result["confidence"],
         "quality_assessment": _quality_assessment(score_result["final_score"]),
         "explanation": explanation,
-        "explanation_provider": "Amazon Bedrock",
+        "explanation_provider": "Ollama (local)",
         "explanation_model": MODEL_ID,
         "positive_factors": score_result["positive_factors"],
         "negative_factors": score_result["negative_factors"],

@@ -1,22 +1,18 @@
-"""Generate score explanations with a real Amazon Bedrock model invocation."""
+"""Generate scoring explanations with a locally running Ollama model."""
 
 import json
 import logging
 import os
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
-
-MODEL_ID = os.getenv(
-    "BEDROCK_MODEL_ID",
-    "us.anthropic.claude-haiku-5-5",
-)
-REGION_NAME = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+MODEL_ID = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 logger = logging.getLogger(__name__)
 
 
 class ExplanationServiceError(RuntimeError):
-    """Raised when Bedrock cannot provide a valid explanation."""
+    """Raised when the local Ollama model cannot provide an explanation."""
 
 
 def build_prompt(lead: dict, score_result: dict) -> str:
@@ -58,45 +54,60 @@ def build_prompt(lead: dict, score_result: dict) -> str:
 
 
 def get_llm_explanation(lead: dict, score_result: dict) -> str:
-    """Call Bedrock and return its explanation, or fail explicitly."""
-    prompt = build_prompt(lead, score_result)
+    """Request an explanation from Ollama; never replace it with a canned response."""
     request_body = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 400,
-        "system": (
-            "You are a careful sales analyst. Explain only the provided deterministic "
-            "scoring result. The score is authoritative and must never be changed."
-        ),
-        "messages": [{"role": "user", "content": prompt}],
+        "model": MODEL_ID,
+        "stream": False,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a careful sales analyst. Explain only the provided "
+                    "deterministic scoring result. The score is authoritative and "
+                    "must never be changed."
+                ),
+            },
+            {"role": "user", "content": build_prompt(lead, score_result)},
+        ],
+        "options": {"temperature": 0.2},
     }
+    request = Request(
+        f"{OLLAMA_BASE_URL}/api/chat",
+        data=json.dumps(request_body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
 
     try:
-        client = boto3.client("bedrock-runtime", region_name=REGION_NAME)
-        response = client.invoke_model(
-            modelId=MODEL_ID,
-            body=json.dumps(request_body),
-            contentType="application/json",
-            accept="application/json",
-        )
-        response_body = json.loads(response["body"].read())
-        explanation = response_body["content"][0]["text"].strip()
+        with urlopen(request, timeout=120) as response:
+            response_body = json.loads(response.read())
+        explanation = response_body["message"]["content"].strip()
         if not explanation:
-            raise ExplanationServiceError("Bedrock returned an empty explanation.")
+            raise ExplanationServiceError(
+                "Ollama returned an empty explanation. Please retry."
+            )
         return explanation
-    except ClientError as error:
-        error_code = error.response.get("Error", {}).get("Code", "Unknown")
-        logger.error("Bedrock request failed with %s.", error_code)
+    except HTTPError as error:
+        if error.code == 404:
+            raise ExplanationServiceError(
+                f"Ollama model '{MODEL_ID}' is not installed. Run "
+                f"`ollama pull {MODEL_ID}` and try again."
+            ) from error
+        logger.error("Ollama returned HTTP %s.", error.code)
         raise ExplanationServiceError(
-            f"Amazon Bedrock rejected the request ({error_code}). Check the model ID, "
-            "AWS region, model access, and IAM permissions."
+            f"Ollama returned HTTP {error.code}. Check that the local Ollama service "
+            "is running, then try again."
         ) from error
-    except BotoCoreError as error:
-        logger.error("Unable to connect to Amazon Bedrock (%s).", type(error).__name__)
+    except URLError as error:
+        logger.error("Could not connect to Ollama (%s).", type(error.reason).__name__)
         raise ExplanationServiceError(
-            "Could not reach Amazon Bedrock. Check AWS credentials, region, and network access."
+            "Could not reach Ollama at "
+            f"{OLLAMA_BASE_URL}. Install Ollama, start the Ollama app or run "
+            "`ollama serve`, then try again."
         ) from error
-    except (json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError) as error:
-        logger.error("Amazon Bedrock returned an invalid response (%s).", type(error).__name__)
+    except (TimeoutError, json.JSONDecodeError, KeyError, TypeError, AttributeError) as error:
+        logger.error("Ollama explanation request failed (%s).", type(error).__name__)
         raise ExplanationServiceError(
-            "Amazon Bedrock returned an invalid explanation response. Please retry."
+            "Ollama did not return a valid explanation. Check that the model is loaded "
+            "and try again."
         ) from error
