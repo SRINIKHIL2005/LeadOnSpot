@@ -1,0 +1,94 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import App from "./App";
+
+beforeEach(() => {
+  global.fetch = jest.fn();
+});
+
+afterEach(() => {
+  jest.resetAllMocks();
+});
+
+test("renders the lead scoring form", () => {
+  render(<App />);
+  expect(screen.getByRole("heading", { name: /leadonspot/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /score this lead/i })).toBeInTheDocument();
+});
+
+test("rejects fewer than two non-empty fields before sending a request", () => {
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "  " } });
+  fireEvent.click(screen.getByRole("button", { name: /score this lead/i }));
+
+  expect(screen.getByRole("alert")).toHaveTextContent(/at least two fields/i);
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+
+test("sends trimmed lead data and renders the score response", async () => {
+  global.fetch.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      lead_name: "Rahul",
+      company: "Acme",
+      score: 90,
+      classification: "Hot",
+      confidence: 100,
+      quality_assessment: "Excellent",
+      explanation: "Strong buying signals.",
+      positive_factors: [],
+      negative_factors: [],
+      next_action: "Schedule a demo.",
+      score_breakdown: {
+        job_title: { score: 100, detail: "Decision maker", weight: "25%" },
+      },
+    }),
+  });
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: " Rahul " } });
+  fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: " Founder " } });
+  fireEvent.click(screen.getByRole("button", { name: /score this lead/i }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://localhost:8000/score",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"name":"Rahul"'),
+      })
+    );
+  });
+  expect(await screen.findByText("Strong buying signals.")).toBeInTheDocument();
+});
+
+test("shows FastAPI validation messages without crashing", async () => {
+  global.fetch.mockResolvedValue({
+    ok: false,
+    status: 422,
+    json: async () => ({
+      detail: [{ loc: ["body", "email"], msg: "value is not a valid email address" }],
+    }),
+  });
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Rahul" } });
+  fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: "Founder" } });
+  fireEvent.click(screen.getByRole("button", { name: /score this lead/i }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("value is not a valid email address");
+});
+
+test("shows a clear message when the backend cannot be reached", async () => {
+  global.fetch.mockRejectedValue(new TypeError("Failed to fetch"));
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Rahul" } });
+  fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: "Founder" } });
+  fireEvent.click(screen.getByRole("button", { name: /score this lead/i }));
+
+  await waitFor(() => {
+    expect(screen.getByText(/unable to reach the scoring service/i)).toBeInTheDocument();
+  });
+});

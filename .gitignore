@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+frontend/node_modules/
+frontend/build/
+frontend/coverage/
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# Local frontend-only Git history
+frontend/.git/
