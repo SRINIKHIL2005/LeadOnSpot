@@ -230,11 +230,43 @@ def calculate_score(lead: dict) -> dict:
         "positive_factors": positive_factors,
         "negative_factors": negative_factors,
         "dimension_scores": {
-            "job_title": {"score": jt_score, "detail": jt_msg, "weight": "25%"},
-            "company_size": {"score": cs_score, "detail": cs_msg, "weight": "20%"},
-            "industry": {"score": ind_score, "detail": ind_msg, "weight": "15%"},
-            "lead_source": {"score": ls_score, "detail": ls_msg, "weight": "15%"},
-            "requirement": {"score": req_score, "detail": req_msg, "weight": "15%"},
-            "contact_completeness": {"score": cc_score, "detail": cc_msg, "weight": "10%"},
+            "job_title": {
+                "score": jt_score,
+                "detail": jt_msg,
+                "weight": "25%",
+                "weighted_contribution": round(jt_score * WEIGHTS["job_title"], 2),
+            },
+            "company_size": {
+                "score": cs_score,
+                "detail": cs_msg,
+                "weight": "20%",
+                "weighted_contribution": round(cs_score * WEIGHTS["company_size"], 2),
+            },
+            "industry": {
+                "score": ind_score,
+                "detail": ind_msg,
+                "weight": "15%",
+                "weighted_contribution": round(ind_score * WEIGHTS["industry"], 2),
+            },
+            "lead_source": {
+                "score": ls_score,
+                "detail": ls_msg,
+                "weight": "15%",
+                "weighted_contribution": round(ls_score * WEIGHTS["lead_source"], 2),
+            },
+            "requirement": {
+                "score": req_score,
+                "detail": req_msg,
+                "weight": "15%",
+                "weighted_contribution": round(req_score * WEIGHTS["requirement"], 2),
+            },
+            "contact_completeness": {
+                "score": cc_score,
+                "detail": cc_msg,
+                "weight": "10%",
+                "weighted_contribution": round(
+                    cc_score * WEIGHTS["contact_completeness"], 2
+                ),
+            },
         },
     }

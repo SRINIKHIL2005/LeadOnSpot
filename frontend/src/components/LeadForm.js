@@ -30,17 +30,9 @@ export default function LeadForm({ onSubmit, loading }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    const trimmedName = form.name.trim().normalize("NFC");
-    if (trimmedName && !isValidName(trimmedName)) {
-      setValidationError(
-        "Name must contain letters; numbers and symbols are not allowed."
-      );
-      return;
-    }
-
-    const filledFields = Object.values(form).filter((value) => value.trim()).length;
-    if (filledFields < 2) {
-      setValidationError("Please enter at least two fields to score a lead.");
+    const formError = validateForm(form);
+    if (formError) {
+      setValidationError(formError);
       return;
     }
 
@@ -128,16 +120,76 @@ export default function LeadForm({ onSubmit, loading }) {
   );
 }
 
-function isValidName(value) {
-  const allowedPunctuation = new Set([" ", "'", "’", "-", "."]);
-  const chars = Array.from(value);
-  return (
-    chars.some((char) => char.toLowerCase() !== char.toUpperCase()) &&
-    chars.every(
-      (char) =>
-        char.toLowerCase() !== char.toUpperCase() ||
-        /^\p{M}$/u.test(char) ||
-        allowedPunctuation.has(char)
-    )
-  );
+function validateForm(form) {
+  const name = form.name.trim().normalize("NFC");
+  if (name && (
+    !/\p{L}/u.test(name) ||
+    !/^[\p{L}\p{M}\s'’.-]+$/u.test(name)
+  )) {
+    return "Name must contain letters; numbers and symbols are not allowed.";
+  }
+
+  const textFields = [
+    ["company_name", "Company name"],
+    ["website", "Website"],
+    ["job_title", "Job title"],
+    ["industry", "Industry"],
+    ["company_location", "Company location"],
+    ["lead_source", "Lead source"],
+    ["requirement", "Requirement"],
+  ];
+
+  for (const [key, label] of textFields) {
+    const value = form[key].trim();
+    if (!value) continue;
+    if (/^[+-]?0+(?:[.,]0+)?$/.test(value)) {
+      return `${label} cannot be zero; enter real information or leave it blank.`;
+    }
+    if (!/\p{L}/u.test(value)) {
+      return `${label} must contain letters.`;
+    }
+  }
+
+  const companySize = form.company_size.trim();
+  if (companySize) {
+    if (!/^\d[\d,]*(?:\s*(?:-|–|—|to)\s*\d[\d,]*)?\s*\+?(?:\s+(?:employees?|people|staff))?$/i.test(companySize)) {
+      return "Enter a company size as a count or range, such as 50-100 employees.";
+    }
+    const employeeCounts = companySize.replace(/,/g, "").match(/\d+/g) || [];
+    if (!employeeCounts.some((count) => Number(count) > 0)) {
+      return "Company size must include a positive employee count, such as 50-100.";
+    }
+  }
+
+  const phone = form.phone.trim();
+  if (phone) {
+    const digits = phone.replace(/\D/g, "");
+    if (!/^[+0-9(). /-]+$/.test(phone) || digits.length < 7 || digits.length > 15) {
+      return "Enter a valid phone number containing 7 to 15 digits.";
+    }
+  }
+
+  const website = form.website.trim();
+  if (website) {
+    const domain = website.replace(/^https?:\/\//i, "").split("/")[0].split(":")[0];
+    if (
+      !domain.includes(".") ||
+      /\s/.test(website) ||
+      !/^[a-z0-9.-]+$/i.test(domain)
+    ) {
+      return "Enter a valid website, such as www.example.com.";
+    }
+  }
+
+  const email = form.email.trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return "Enter a valid email address.";
+  }
+
+  const filledFields = Object.values(form).filter((value) => value.trim()).length;
+  if (filledFields < 2) {
+    return "Please enter at least two fields to score a lead.";
+  }
+
+  return "";
 }

@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, ValidationInfo, field_validator
 from typing import Optional
 import unicodedata
+import re
 
 if __package__:
     from .explainer import MODEL_ID, ExplanationServiceError, get_llm_explanation
@@ -31,8 +32,18 @@ class LeadInput(BaseModel):
     company_size: Optional[str] = Field(default=None, max_length=100)
     lead_source: Optional[str] = Field(default=None, max_length=150)
     requirement: Optional[str] = Field(default=None, max_length=3000)
-    email: Optional[str] = Field(default=None, max_length=254)
+    email: Optional[EmailStr] = Field(default=None, max_length=254)
     phone: Optional[str] = Field(default=None, max_length=50)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def reject_zero_placeholders(cls, value: object, info: ValidationInfo) -> object:
+        if isinstance(value, str) and re.fullmatch(r"\s*[+-]?0+(?:[.,]0+)?\s*", value):
+            raise ValueError(
+                f"{info.field_name.replace('_', ' ').capitalize()} cannot be zero; "
+                "enter real information or leave it blank."
+            )
+        return value
 
     @field_validator("name")
     @classmethod
@@ -57,6 +68,74 @@ class LeadInput(BaseModel):
                 "Name must contain letters; numbers and symbols are not allowed."
             )
         return normalized
+
+    @field_validator(
+        "company_name",
+        "job_title",
+        "industry",
+        "company_location",
+        "lead_source",
+        "requirement",
+    )
+    @classmethod
+    def validate_text_fields(cls, value: Optional[str], info: ValidationInfo) -> Optional[str]:
+        if value is None or not value.strip():
+            return value
+        if not any(unicodedata.category(char).startswith("L") for char in value):
+            raise ValueError(
+                f"{info.field_name.replace('_', ' ').capitalize()} must contain letters."
+            )
+        return value.strip()
+
+    @field_validator("website")
+    @classmethod
+    def validate_website(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return value
+        website = value.strip()
+        domain = re.sub(r"^https?://", "", website, flags=re.IGNORECASE).split("/", 1)[0]
+        domain = domain.split(":", 1)[0]
+        if (
+            not domain
+            or "." not in domain
+            or any(char.isspace() for char in website)
+            or not re.fullmatch(r"[A-Za-z0-9.-]+", domain)
+        ):
+            raise ValueError("Enter a valid website, such as www.example.com.")
+        return website
+
+    @field_validator("company_size")
+    @classmethod
+    def validate_company_size(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return value
+        size = value.strip()
+        if not re.fullmatch(
+            r"\d[\d,]*(?:\s*(?:-|–|—|to)\s*\d[\d,]*)?\s*\+?"
+            r"(?:\s+(?:employees?|people|staff))?",
+            size,
+            flags=re.IGNORECASE,
+        ):
+            raise ValueError(
+                "Enter a company size as a count or range, such as 50-100 employees."
+            )
+        numbers = re.findall(r"\d+", size.replace(",", ""))
+        if not numbers or not any(int(number) > 0 for number in numbers):
+            raise ValueError(
+                "Company size must include a positive employee count, such as 50-100."
+            )
+        return value.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return value
+        phone = value.strip()
+        digits = re.sub(r"\D", "", phone)
+        if not re.fullmatch(r"[+0-9(). /-]+", phone) or not 7 <= len(digits) <= 15:
+            raise ValueError("Enter a valid phone number containing 7 to 15 digits.")
+        return phone
 
 
 @app.get("/health")

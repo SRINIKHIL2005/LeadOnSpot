@@ -36,6 +36,18 @@ test("rejects a numeric name before sending a request", () => {
   expect(global.fetch).not.toHaveBeenCalled();
 });
 
+test("rejects zero placeholders in lead fields before sending a request", () => {
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Nikhil" } });
+  fireEvent.change(screen.getByLabelText(/company name/i), { target: { value: "0" } });
+  fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: "0" } });
+  fireEvent.click(screen.getByRole("button", { name: /score this lead/i }));
+
+  expect(screen.getByRole("alert")).toHaveTextContent(/company name cannot be zero/i);
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+
 test("sends trimmed lead data and renders the score response", async () => {
   global.fetch.mockResolvedValue({
     ok: true,
@@ -54,7 +66,12 @@ test("sends trimmed lead data and renders the score response", async () => {
       negative_factors: [],
       next_action: "Schedule a demo.",
       score_breakdown: {
-        job_title: { score: 100, detail: "Decision maker", weight: "25%" },
+        job_title: {
+          score: 100,
+          detail: "Decision maker",
+          weight: "25%",
+          weighted_contribution: 25,
+        },
       },
     }),
   });

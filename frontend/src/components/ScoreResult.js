@@ -49,6 +49,9 @@ export default function ScoreResult({ result }) {
                 <span className="breakdown-score" style={{ color: scoreColor(val.score) }}>
                   {val.score}/100
                 </span>
+                <span className="breakdown-contribution">
+                  +{val.weighted_contribution} points
+                </span>
               </div>
               <div className="breakdown-bar-bg">
                 <div
