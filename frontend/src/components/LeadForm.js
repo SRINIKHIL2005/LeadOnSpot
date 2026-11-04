@@ -30,6 +30,14 @@ export default function LeadForm({ onSubmit, loading }) {
 
   function handleSubmit(e) {
     e.preventDefault();
+    const trimmedName = form.name.trim().normalize("NFC");
+    if (trimmedName && !isValidName(trimmedName)) {
+      setValidationError(
+        "Name must contain letters; numbers and symbols are not allowed."
+      );
+      return;
+    }
+
     const filledFields = Object.values(form).filter((value) => value.trim()).length;
     if (filledFields < 2) {
       setValidationError("Please enter at least two fields to score a lead.");
@@ -83,6 +91,8 @@ export default function LeadForm({ onSubmit, loading }) {
                 name={key}
                 type={type || "text"}
                 placeholder={placeholder}
+                maxLength={key === "name" ? 100 : undefined}
+                aria-invalid={key === "name" && Boolean(validationError)}
                 value={form[key]}
                 onChange={handleChange}
               />
@@ -115,5 +125,19 @@ export default function LeadForm({ onSubmit, loading }) {
         </div>
       </form>
     </div>
+  );
+}
+
+function isValidName(value) {
+  const allowedPunctuation = new Set([" ", "'", "’", "-", "."]);
+  const chars = Array.from(value);
+  return (
+    chars.some((char) => char.toLowerCase() !== char.toUpperCase()) &&
+    chars.every(
+      (char) =>
+        char.toLowerCase() !== char.toUpperCase() ||
+        /^\p{M}$/u.test(char) ||
+        allowedPunctuation.has(char)
+    )
   );
 }

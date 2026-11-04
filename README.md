@@ -67,7 +67,7 @@ LeadOnSpot/
 
 - Python 3.10+
 - Node.js 18+
-- AWS account with Bedrock access (Claude 3 Haiku enabled in us-east-1)
+- AWS account with Bedrock model access
 - AWS credentials configured (`aws configure` or environment variables)
 
 ### 1. Backend Setup
@@ -91,18 +91,26 @@ npm start
 
 The app will open at `http://localhost:3000`
 
-### 3. AWS Bedrock Setup
+### 3. Configure the live explanation model
 
-Make sure your AWS credentials have permission to call Bedrock:
+Complete this setup before scoring a lead.
+
+Every successful scoring request calls Amazon Bedrock for its explanation. The app does **not** substitute a template if Bedrock is unavailable: it returns an error so a rule-based explanation cannot be mistaken for an LLM response.
 
 ```bash
 aws configure
-# Enter your AWS Access Key ID, Secret, and region: us-east-1
+# Choose a region where your selected Bedrock model is available.
 ```
 
-Enable the **Claude 3 Haiku** model in AWS Bedrock console → Model access → Request access.
+The default model ID is the US inference profile `us.anthropic.claude-haiku-5-5`; the default region is `us-east-1`. This uses the currently active Haiku 5.5 model rather than Claude 3 Haiku, which reached end of life in most regions. Enable model access in the Bedrock console and ensure the configured AWS identity has permission to call `bedrock:InvokeModel`. See the [official AWS Claude Haiku 5.5 model card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html) for current regional availability. The model and region can be overridden before starting the backend:
 
-> **Note:** If Bedrock is unavailable or not configured, the system automatically falls back to a rule-based explanation. The score is never affected.
+```powershell
+$env:BEDROCK_MODEL_ID = "your-enabled-bedrock-model-id"
+$env:AWS_REGION = "us-east-1"
+python -m uvicorn main:app --reload --port 8000
+```
+
+The result displays the provider and model ID returned by the backend. If the AWS credentials, region, model ID, access, or network are wrong, scoring returns an explicit service error instead of showing a fabricated LLM explanation.
 
 ---
 
@@ -125,7 +133,7 @@ cd backend
 python -m unittest -v test_scorer
 ```
 
-8 discoverable tests covering lead classifications, score consistency, missing fields, and Bedrock success/fallback behavior.
+Use `python -m pip install -r requirements.txt` to install the backend and API-test dependencies. The discoverable tests cover score classifications, consistent scoring, input validation, Bedrock request construction, and explicit Bedrock failure handling. Bedrock is mocked in automated tests; live requests use your AWS credentials.
 
 ---
 
@@ -160,6 +168,8 @@ python -m unittest -v test_scorer
   "confidence": 100,
   "quality_assessment": "Excellent — High-value lead with strong buying signals",
   "explanation": "...",
+  "explanation_provider": "Amazon Bedrock",
+  "explanation_model": "us.anthropic.claude-haiku-5-5",
   "positive_factors": ["..."],
   "negative_factors": [],
   "next_action": "Assign to senior sales rep immediately...",
@@ -167,15 +177,15 @@ python -m unittest -v test_scorer
 }
 ```
 
-Individual fields are optional, but at least two non-empty fields are required to score a lead. The browser checks email format when an email is entered; other fields remain free text. Unknown job titles, industries, lead sources, and company-size formats are scored using neutral/default values rather than rejected.
+Individual fields are optional, but at least two non-empty fields are required. If a name is provided, both the browser and API require a human name containing letters; names such as `00-10` are rejected. Other lead fields remain free text. Unknown job titles, industries, lead sources, and company-size formats are scored using neutral/default values rather than rejected.
 
-The React form sends the lead fields as JSON to `POST /score` on the FastAPI backend. The backend calculates the weighted score in `backend/scorer.py`; AWS Bedrock is used only to generate the explanation, and the explainer falls back to a rule-based explanation when Bedrock is unavailable.
+The React form sends the lead fields as JSON to `POST /score` on the FastAPI backend. The backend calculates the weighted score in `backend/scorer.py`; Amazon Bedrock generates the explanation using the dimension scores, weights, strengths, weaknesses, and relevant lead details. The LLM cannot change the deterministic score. The “Load Sample Lead” button only fills the form as a demo convenience; normal submissions use the values the user entered.
 
 ---
 
 ## Tech Stack
 
 - **Backend**: Python, FastAPI, Pydantic
-- **AI/LLM**: AWS Bedrock (Claude 3 Haiku) — for explanations only
+- **AI/LLM**: AWS Bedrock (Claude Haiku 5.5) — for explanations only
 - **Frontend**: React, plain CSS
 - **Scoring**: Pure rule-based weighted algorithm (deterministic, no randomness)

@@ -87,6 +87,8 @@ function isScoreResponse(data) {
     typeof data.score === "number" &&
     typeof data.classification === "string" &&
     typeof data.explanation === "string" &&
+    typeof data.explanation_provider === "string" &&
+    typeof data.explanation_model === "string" &&
     Array.isArray(data.positive_factors) &&
     Array.isArray(data.negative_factors) &&
     data.score_breakdown &&

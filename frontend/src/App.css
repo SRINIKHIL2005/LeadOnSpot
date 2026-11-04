@@ -162,6 +162,7 @@ textarea { resize: vertical; }
 
 /* ── Sections ── */
 .section h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; color: #4a5568; }
+.explanation-source { color: #718096; font-size: 0.78rem; margin: -6px 0 8px; }
 .explanation { font-size: 0.93rem; line-height: 1.65; color: #4a5568; }
 
 /* ── Breakdown ── */
