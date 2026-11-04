@@ -125,7 +125,7 @@ cd backend
 python -m unittest -v test_scorer
 ```
 
-6 discoverable tests covering: Hot lead, Warm lead, Cold lead, Enterprise lead, Consistency check, Missing fields.
+8 discoverable tests covering lead classifications, score consistency, missing fields, and Bedrock success/fallback behavior.
 
 ---
 

@@ -4,11 +4,13 @@ scoring explanation. The score itself comes from scorer.py, NOT from the LLM.
 """
 
 import json
+import logging
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 # Claude model on Bedrock — change to claude-3-sonnet if you want richer output
 MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+logger = logging.getLogger(__name__)
 
 
 def build_prompt(lead: dict, score_result: dict) -> str:
@@ -57,11 +59,14 @@ def get_llm_explanation(lead: dict, score_result: dict) -> str:
         return result["content"][0]["text"].strip()
 
     except ClientError as e:
-        error_code = e.response["Error"]["Code"]
-        if error_code in ("AccessDeniedException", "UnrecognizedException"):
-            return _fallback_explanation(lead, score_result)
-        raise
-    except Exception:
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
+        logger.warning("Bedrock request failed (%s); using the fallback explanation.", error_code)
+        return _fallback_explanation(lead, score_result)
+    except (BotoCoreError, json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+        logger.warning(
+            "Bedrock explanation failed (%s); using the fallback explanation.",
+            type(e).__name__,
+        )
         return _fallback_explanation(lead, score_result)
 
 

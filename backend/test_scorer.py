@@ -1,5 +1,10 @@
+import json
 import unittest
+from unittest.mock import patch
 
+from botocore.exceptions import ClientError
+
+from explainer import get_llm_explanation
 from scorer import calculate_score
 
 
@@ -77,6 +82,44 @@ class CalculateScoreTests(unittest.TestCase):
     def test_missing_fields_are_scored_as_cold(self):
         lead = {"name": "Unknown", "email": "x@x.com"}
         self.assertEqual(calculate_score(lead)["classification"], "Cold")
+
+    @patch("explainer.boto3.client")
+    def test_bedrock_throttling_uses_logged_fallback(self, bedrock_client):
+        score_result = {
+            "final_score": 50,
+            "classification": "Warm",
+            "positive_factors": [],
+            "negative_factors": [],
+            "next_action": "Follow up soon.",
+        }
+        bedrock_client.return_value.invoke_model.side_effect = ClientError(
+            {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}},
+            "InvokeModel",
+        )
+
+        with self.assertLogs("explainer", level="WARNING") as captured:
+            explanation = get_llm_explanation({"name": "Test Lead"}, score_result)
+
+        self.assertIn("Test Lead received a score of 50/100", explanation)
+        self.assertIn("ThrottlingException", captured.output[0])
+
+    @patch("explainer.boto3.client")
+    def test_successful_bedrock_response_is_used(self, bedrock_client):
+        score_result = {
+            "final_score": 50,
+            "classification": "Warm",
+            "positive_factors": [],
+            "negative_factors": [],
+            "next_action": "Follow up soon.",
+        }
+        response_body = json.dumps({"content": [{"text": "Bedrock explanation."}]}).encode()
+        bedrock_client.return_value.invoke_model.return_value = {
+            "body": type("ResponseBody", (), {"read": lambda self: response_body})()
+        }
+
+        explanation = get_llm_explanation({"name": "Test Lead"}, score_result)
+
+        self.assertEqual(explanation, "Bedrock explanation.")
 
 
 if __name__ == "__main__":
