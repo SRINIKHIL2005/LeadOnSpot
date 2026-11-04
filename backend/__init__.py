@@ -1,0 +1,1 @@
+"""LeadOnSpot backend package."""

@@ -73,10 +73,11 @@ LeadOnSpot/
 ### 1. Backend Setup
 
 ```bash
-cd backend
 python -m pip install -r requirements.txt
-python -m uvicorn main:app --reload --port 8000
+python -m uvicorn backend.main:app --reload --port 8000
 ```
+
+Run these commands from the project root directory (`D:\LeadOnSpot`).
 
 The API will be available at `http://localhost:8000`
 API docs: `http://localhost:8000/docs`
@@ -120,11 +121,10 @@ All scoring rules are in `backend/scorer.py`. The file is designed to be easily 
 ## Running Tests
 
 ```bash
-cd backend
-python -m unittest -v test_scorer
+python -m unittest -v backend.test_scorer
 ```
 
-Use `python -m pip install -r requirements.txt` to install the backend and API-test dependencies. The discoverable tests cover score classifications, consistency, name validation, Ollama request construction, and missing/unavailable local model handling. Automated tests mock the Ollama HTTP response; real explanations require the locally installed Ollama service and model.
+Run tests from the project root. The discoverable tests cover score classifications, consistency, name validation, Ollama request construction, and missing/unavailable local model handling. Automated tests mock the Ollama HTTP response; real explanations require the locally installed Ollama service and model.
 
 ---
 

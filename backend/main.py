@@ -4,8 +4,12 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import unicodedata
 
-from scorer import calculate_score
-from explainer import MODEL_ID, ExplanationServiceError, get_llm_explanation
+if __package__:
+    from .explainer import MODEL_ID, ExplanationServiceError, get_llm_explanation
+    from .scorer import calculate_score
+else:
+    from explainer import MODEL_ID, ExplanationServiceError, get_llm_explanation
+    from scorer import calculate_score
 
 app = FastAPI(title="Lead Scoring Agent", version="1.0.0")
 
